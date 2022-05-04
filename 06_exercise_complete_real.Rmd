@@ -1,0 +1,329 @@
+---
+title: 'Weekly Exercises #6'
+author: "Jon Kazor"
+output: 
+  html_document:
+    keep_md: TRUE
+    toc: TRUE
+    toc_float: TRUE
+    df_print: paged
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=TRUE, message=FALSE, warning=FALSE)
+```
+
+```{r libraries}
+library(tidyverse)     # for data cleaning and plotting
+library(gardenR)       # for Lisa's garden data
+library(lubridate)     # for date manipulation
+library(openintro)     # for the abbr2state() function
+library(palmerpenguins)# for Palmer penguin data
+library(maps)          # for map data
+library(ggmap)         # for mapping points on maps
+library(gplots)        # for col2hex() function
+library(RColorBrewer)  # for color palettes
+library(sf)            # for working with spatial data
+library(leaflet)       # for highly customizable mapping
+library(ggthemes)      # for more themes (including theme_map())
+library(plotly)        # for the ggplotly() - basic interactivity
+library(gganimate)     # for adding animation layers to ggplots
+library(gifski)        # for creating the gif (don't need to load this library every time,but need it installed)
+library(transformr)    # for "tweening" (gganimate)
+library(shiny)         # for creating interactive apps
+library(patchwork)     # for nicely combining ggplot2 graphs  
+library(gt)            # for creating nice tables
+library(rvest)         # for scraping data
+library(robotstxt)     # for checking if you can scrape data
+theme_set(theme_minimal())
+```
+
+```{r data}
+# Lisa's garden data
+data("garden_harvest")
+
+#COVID-19 data from the New York Times
+covid19 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv")
+
+```
+
+## Put your homework on GitHub!
+
+Go [here](https://github.com/llendway/github_for_collaboration/blob/master/github_for_collaboration.md) or to previous homework to remind yourself how to get set up. 
+
+Once your repository is created, you should always open your **project** rather than just opening an .Rmd file. You can do that by either clicking on the .Rproj file in your repository folder on your computer. Or, by going to the upper right hand corner in R Studio and clicking the arrow next to where it says Project: (None). You should see your project come up in that list if you've used it recently. You could also go to File --> Open Project and navigate to your .Rproj file. 
+
+## Instructions
+
+* Put your name at the top of the document. 
+
+* **For ALL graphs, you should include appropriate labels.** 
+
+* Feel free to change the default theme, which I currently have set to `theme_minimal()`. 
+
+* Use good coding practice. Read the short sections on good code with [pipes](https://style.tidyverse.org/pipes.html) and [ggplot2](https://style.tidyverse.org/ggplot2.html). **This is part of your grade!**
+
+* **NEW!!** With animated graphs, add `eval=FALSE` to the code chunk that creates the animation and saves it using `anim_save()`. Add another code chunk to reread the gif back into the file. See the [tutorial](https://animation-and-interactivity-in-r.netlify.app/) for help. 
+
+* When you are finished with ALL the exercises, uncomment the options at the top so your document looks nicer. Don't do it before then, or else you might miss some important warnings and messages.
+
+
+## Warm-up exercises from tutorial
+
+1. Read in the fake garden harvest data. Find the data [here](https://github.com/llendway/scraping_etc/blob/main/2020_harvest.csv) and click on the `Raw` button to get a direct link to the data. After reading in the data, do one of the quick checks mentioned in the tutorial.
+
+```{r}
+
+fake_garden_harvest <- read_csv("https://raw.githubusercontent.com/llendway/scraping_etc/main/2020_harvest.csv")
+
+fake_garden_harvest
+```
+
+  
+2. Read in this [data](https://www.kaggle.com/heeraldedhia/groceries-dataset) from the kaggle website. You will need to download the data first. Save it to your project/repo folder. Do some quick checks of the data to assure it has been read in appropriately.
+
+```{r}
+# change variable name
+Groceries_dataset_2  <- read_csv("Groceries_dataset.csv")
+
+Groceries_dataset_2
+```
+
+
+3. Create a table using `gt` with data from your project or from the `garden_harvest` data if your project data aren't ready. Use at least 3 `gt()` functions.
+
+```{r}
+garden_harvest %>% 
+  gt()
+
+tab <-
+  garden_harvest %>% 
+  gt() %>% 
+  fmt_date(
+    columns = date,
+    date_style = 7)
+tab
+
+tab2 <-
+  tab %>% 
+  tab_header(
+    title = md("Lisa's Garden data, sorted")
+  )
+tab2
+
+tab3 <-
+  tab2 %>% 
+  cols_hide(
+    columns = c(units)
+  )
+tab3
+
+
+```
+
+
+5. Use `patchwork` operators and functions to combine at least two graphs using your project data or `garden_harvest` data if your project data aren't read.
+
+```{r, fig.width = 8}
+g_A <- garden_harvest %>%
+  filter(vegetable == "lettuce") %>%
+  ggplot(aes(x = weight)) +
+  geom_histogram(bins = 15, fill = "black") +
+  labs(title = "Count of Lettuce Harvested by Weight")
+
+g_B <- garden_harvest %>% 
+  filter(vegetable == "lettuce") %>% 
+  group_by(variety) %>%  
+  mutate(tot_weight = sum(weight)) %>%
+  ggplot(aes(x = variety), fct_reorder(variety, weight, sum)) +
+  geom_bar(fill = "black") +
+  labs(title = "Count of Lettuce Harvested by Variety")
+
+g_A | g_B
+```
+
+  
+## Webscraping exercise (also from tutorial)
+
+Use the data from the [Macalester Registrar's Fall 2017 Class Schedule](https://www.macalester.edu/registrar/schedules/2017fall/class-schedule/#crs10008) to complete all these exercises.
+
+```{r}
+
+fall2017_classdata <- read_html("https://www.macalester.edu/registrar/schedules/2017fall/class-schedule/#crs10008")
+```
+
+
+6. Find the correct selectors for the following fields. Make sure that each matches 762 results:
+
+  * Course Number
+  
+```{r}
+course_numb <- 
+ fall2017_classdata %>%
+  html_elements(".class-schedule-course-number") %>%
+  html_text2()
+head(course_numb)
+```
+
+  * Course Name
+```{r}
+course_names <- 
+  fall2017_classdata %>%
+  html_elements(".class-schedule-course-title") %>%
+  html_text2()
+head(course_names)
+```
+  
+  * Day
+```{r}
+course_days <- fall2017_classdata %>%
+  html_elements("td.class-schedule-label:nth-child(3)") %>% 
+  html_text2() %>% 
+  str_sub(start = 7)
+
+head(course_days)
+```
+  
+  * Time
+```{r}
+course_times <- fall2017_classdata %>% 
+  html_elements("td.class-schedule-label:nth-child(4)") %>% 
+  html_text2() %>% 
+  str_sub(start = 7)
+head(course_times)
+```
+  
+  * Room
+```{r}
+course_rooms <- fall2017_classdata %>% 
+  html_elements("td.class-schedule-label:nth-child(5)") %>% 
+  html_text2() %>% 
+  str_sub(start = 7)
+head(course_rooms)
+```
+  
+  * Instructor
+```{r}
+course_instructor <- fall2017_classdata %>% 
+  html_elements("td.class-schedule-label:nth-child(6)") %>% 
+  html_text2() %>% 
+  str_sub(start = 13)
+head(course_instructor)
+```
+
+  * Avail. / Max
+```{r}
+course_avail <- fall2017_classdata %>% 
+  html_elements("td.class-schedule-label:nth-child(7)") %>% 
+  html_text2() %>% 
+  str_sub(start = 14)
+head(course_avail)
+```
+  
+  * General Education Requirements (make sure you only match 762; beware of the Mac copyright banner at the bottom of the page!)
+```{r}
+gen_ed_req <- fall2017_classdata %>% 
+  html_elements("p:nth-child(2) , p:nth-child(2) strong") %>% 
+  html_text2() %>% 
+  str_sub(start = 35)
+head(gen_ed_req)
+```
+  
+  * Description
+  
+```{r}
+descrip <- fall2017_classdata %>% 
+  html_elements(".collapsed p:nth-child(1)") %>% 
+  html_text2()
+head(descrip)
+```
+
+
+Then, put all this information into one dataset (tibble or data.frame) Do not include any extraneous information like "Instructor: ".
+
+
+```{r}
+course_df <- tibble(Number = course_numb, 
+                    Name = course_names,
+                    Day = course_days,
+                    Time = course_times,
+                    Room = course_rooms,
+                    Instructor = course_instructor,
+                    `Avail/Max` = course_avail,
+                    Description = descrip
+                    )
+course_df
+```
+
+
+7. Create a graph that shows the number of sections offered per department. Hint: The department is a substring of the course number - there are `str_XXX()` functions that can help. Yes, COMP and MATH are the same department, but for this exercise you can just show the results by four letter department code, e.g., with COMP and MATH separate.
+
+```{r, fig.height=6}
+course_df %>% 
+  mutate(Number = str_sub(Number, end = -7)) %>% 
+  group_by(Number) %>% 
+  count(Number) %>% 
+
+  ggplot() +
+  geom_col(aes(x = n,
+               y = fct_rev(fct_infreq(Number)), 
+               fill = n)) +
+  
+  labs(title = "Sections Offered Per Department",
+       x = "",
+       y = "Department(abbreviated)",
+       caption = "Graph by Jon Kazor; Data from Macalester College Registrar.")
+  
+
+
+```
+
+8. Analyze the typical length of course names by department. To do so, create a new data table based on your courses data table, with the following changes:
+
+```{r}
+name_length <- 
+str_length(course_names)
+
+descrip_length <-
+str_length(descrip)
+
+Dept_sections <- course_numb %>%
+str_sub(start = 1, end = -7)
+
+course_df_1 <- tibble(Department = Dept_sections,
+Number = course_numb,
+Name = course_names,
+Day = course_days,
+Time = course_times,
+Room = course_rooms,
+Instructor = course_instructor,
+`Avail/Max` = course_avail,
+Description = descrip,
+Name_Length = name_length,
+Course_Length = descrip_length)
+head(course_df_1)
+
+course_df_1 %>%
+group_by(Department) %>% 
+filter(n() >= 10 ) %>%
+mutate(Avg_length = mean(Name_Length)) %>% 
+ggplot() +
+geom_bar(aes(y = Department, 
+fill = Avg_length)) +
+scale_x_continuous(expand=c(0,0)) +
+labs(title = "Average Length of Course Name for Classes, by Department",
+x = "Count of Classes in the Dept",
+fill = "Average Title Length")
+```
+
+  
+  * New columns for the length of the title of a course and the length of the description of the course. Hint: `str_length`.  
+  * Remove departments that have fewer than 10 sections of courses. To do so, group by department, then remove observations in groups with fewer than 10 sections (Hint: use filter with n()). Then `ungroup()` the data.  
+  * Create a visualization of the differences across groups in lengths of course names or course descriptions. Think carefully about the visualization you should be using!
+
+
+  
+
+**DID YOU REMEMBER TO UNCOMMENT THE OPTIONS AT THE TOP?**
